@@ -1,0 +1,21 @@
+# Test input/output
+Anytype.*/
+notion_import_*.zip
+notion_import_test_*.zip
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# WorkBuddy
+.workbuddy/
