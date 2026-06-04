@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "claudeCode.allowDangerouslySkipPermissions":true,
+    "claudeCode.initialPermissionMode":"bypassPermissions",
+    "allow": [
+      "Bash(python *)"
+    ]
+  }
+}
