@@ -134,22 +134,13 @@ def fix_markdown_escapes(content: str) -> str:
     修复 Anytype 导出时产生的 Markdown 转义残留，Notion 无法识别
     大多数反斜杠转义，会导致标题异常、粗体/斜体格式错乱等问题。
 
-    仅处理两类明确由 Anytype 导致的转义残留：
+    处理 Anytype 的转义残留（适用于所有上下文，包括代码块内）：
     1. \\_ → _    转义下划线 → 字面量下划线
-       如 cos\\_fade\\_out → cos_fade_out
-       f\\_out → f_out, x\\_q15 → x_q15
-       注意：\\_ 不是合法的 LaTeX/C 转义序列，在所有上下文中
-       都是 Anytype 残留，包括代码块内也须转换。
+    2. \\* → *    转义星号 → 字面量星号（\\*\\* → ** 还原粗体）
+    3. \\` → `    转义反引号 → 字面量反引号（修复行内代码跨解析歧义）
+    4. ****text**** / ****text** → **text**  四星号 artifact
 
-    2. \\* → *    转义星号 → 字面量星号
-       如 pi \\* t → pi * t
-       \\*\\*text\\*\\* → **text**（Anytype 转义的粗体 → 还原粗体标记）
-       同上，代码块内的 \\* 也是 Anytype 残留。
-
-    3. ****text**** → **text**
-       Anytype 导出时偶发的四星号格式倍增 artifact。
-
-    注意：不处理其他转义（\\-, \\|, \\#, \\[, \\], \\(, \\), \\<, \\> 等），
+    不处理 \\- \\| \\# \\[ \\] \\( \\) \\< \\> 等，
     这些可能属于 LaTeX 数学环境或代码内容，强行转换会破坏公式和表格。"""
     lines = content.split('\n')
     result_lines = []
@@ -161,8 +152,12 @@ def fix_markdown_escapes(content: str) -> str:
         # ── 2. \\* → *（含 \\*\\* → ** 还原粗体）──
         line = line.replace('\\*', '*')
 
-        # ── 3. 四星号 artifact → ** ──
-        # 两种情况：****text**** 和 ****text**（开/闭均可能被倍增）
+        # ── 3. \\` → `  反引号转义残留 ──
+        # Anytype 用 \\` 表示字面量反引号。Notion 不识别此转义，
+        # 会导致行内代码跨被提前关闭而产生未闭合的代码跨，吞掉后续内容。
+        line = line.replace('\\`', '`')
+
+        # ── 4. 四星号 artifact → ** ──
         line = re.sub(r'\*\*\*\*(.+?)\*\*\*\*', r'**\1**', line)
         line = re.sub(r'\*\*\*\*(.+?)\*\*', r'**\1**', line)
 
@@ -273,7 +268,8 @@ def _strip_cell_formatting(cell: str) -> str:
     """
     去除单个单元格内的所有 Markdown 行内样式标记。
     按优先级从外到内剥离，确保嵌套样式也被处理。
-    """
+    最后清除残留的裸 * 和 _ 字符，防止在 Notion 表格中触发
+    意外的强调解析（渲染可能吞掉后续内容）。"""
     # 1. 去除删除线 ~~text~~
     cell = re.sub(r'~~(.+?)~~', r'\1', cell)
     # 2. 去除粗体 **text** 和 __text__（先粗体后斜体，避免 * 冲突）
@@ -284,6 +280,10 @@ def _strip_cell_formatting(cell: str) -> str:
     # 4. 去除斜体 *text* 和 _text_
     cell = re.sub(r'\*(.+?)\*', r'\1', cell)
     cell = re.sub(r'_(.+?)_', r'\1', cell)
+    # 5. 清除残留的裸 * (如 glob 模式 *.md) 和单词边界的 _
+    #    Notion 表格不支持行内强调，残留的 * 和 _ 可能被误解析
+    cell = cell.replace('*', '')
+    cell = re.sub(r'(?<!\w)_(?!\w)', '', cell)
 
     return cell
 
